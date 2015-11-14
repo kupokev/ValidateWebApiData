@@ -10,7 +10,7 @@ using System.Web.Http.Filters;
 
 namespace ValidateData.Filter
 {
-    public class ValidateFilter : ActionFilterAttribute
+    public class ValidateWebApiFilter : ActionFilterAttribute
     {
         public override void OnActionExecuting(HttpActionContext actionContext)
         {
@@ -46,19 +46,25 @@ namespace ValidateData.Filter
             // This currently does not check for every type. 
             if (myType == typeof(int))
             {
-                if (!ValidateInt(item.Value)) return false;
+                // Check it nullable and null
+                if (IsNullable(item.Value, item.Key) && item.Value != null)
+                    if (!ValidateInt(item.Value)) return false;
             }
             if (myType == typeof(double))
             {
-                if (!ValidateDouble(item.Value)) return false;
+                // Check it nullable and null
+                if (IsNullable(item.Value, item.Key) && item.Value != null)
+                    if (!ValidateDouble(item.Value)) return false;
             }
             else if (myType == typeof(string))
             {
-                if (!ValidateString(item.Value)) return false;
+                if (item.Value != null)
+                    if (!ValidateString(item.Value)) return false;
             }
             else if (myType.Namespace.Contains("System.Collections.Generic"))
             {
-                if (!ValidateCollection(item.Value)) return false;
+                if (item.Value != null)
+                    if (!ValidateCollection(item.Value)) return false;
             }
             else if (myType.IsClass)
             {
@@ -68,6 +74,32 @@ namespace ValidateData.Filter
             return true;
         }
 
+        // Still work in progress. Needs tested. Better way of doing this?
+        /// <summary>
+        /// Checks if type is a nullable type for strongly typed variables.
+        /// </summary>
+        /// <param name="value">Property Value</param>
+        /// <param name="key">Property Name </param>
+        /// <returns>bool</returns>
+        private bool IsNullable(object value, string key)
+        {
+            // Checking for nullable types:
+            // https://msdn.microsoft.com/en-us/library/system.nullable.getunderlyingtype(v=vs.110).aspx
+
+            Type myType = value.GetType();
+            MethodInfo mi = myType.GetMethod(key);
+            Type retval = mi.ReturnType;
+
+            if (!retval.Namespace.Contains("Nullable")) return false;
+
+            return true;
+        }
+
+        /// <summary>
+        /// Iterates through the class's properties to see if they have valid values.
+        /// </summary>
+        /// <param name="value">Object of a class</param>
+        /// <returns></returns>
         private bool ValidateClass(object value)
         {
             Type myType = value.GetType();
@@ -83,6 +115,11 @@ namespace ValidateData.Filter
             return true;
         }
 
+        /// <summary>
+        /// Checks if a variable of type "Double" has a value of type double.
+        /// </summary>
+        /// <param name="value">Object of type double</param>
+        /// <returns></returns>
         private bool ValidateDouble(object value)
         {
             try
@@ -99,6 +136,11 @@ namespace ValidateData.Filter
             }
         }
 
+        /// <summary>
+        /// Checks if a variable of type "Integer" has a value of type integer.
+        /// </summary>
+        /// <param name="value">Object of type integer</param>
+        /// <returns></returns>
         private bool ValidateInt(object value)
         {
             try
@@ -115,6 +157,11 @@ namespace ValidateData.Filter
             }
         }
 
+        /// <summary>
+        /// Checks if a variable of type "String" has a value of type string.
+        /// </summary>
+        /// <param name="value">Object of type string</param>
+        /// <returns></returns>
         private bool ValidateString(object value)
         {
             try
@@ -123,9 +170,12 @@ namespace ValidateData.Filter
 
                 // This section can be modified as needed. This is a really strict
                 // test currently. This is meant to help prevent scripting attacks.
-                if (val.Contains('<')) return false;
-                if (val.Contains('>')) return false;
-                if (val.Contains(';')) return false;
+                if (val != null)
+                {
+                    if (val.Contains('<')) return false;
+                    if (val.Contains('>')) return false;
+                    if (val.Contains(';')) return false;
+                }
 
                 return true;
             }
@@ -135,17 +185,25 @@ namespace ValidateData.Filter
             }
         }
 
+        /// <summary>
+        /// Iterates through a collection of <T>. Finds the type of <T> and checks the values.
+        /// </summary>
+        /// <param name="value">Object of a colletion of <T> objects</param>
+        /// <returns></returns>
         private bool ValidateCollection(object value)
         {
             try
             {
                 ICollection valueList = value as ICollection;
 
-                foreach (var valueItem in valueList)
+                if (value != null)
                 {
-                    var valueType = valueItem.GetType();
+                    foreach (var valueItem in valueList)
+                    {
+                        var valueType = valueItem.GetType();
 
-                    if (!IsValid(new KeyValuePair<string, object>("Object", valueItem))) return false;
+                        if (!IsValid(new KeyValuePair<string, object>("Object", valueItem))) return false;
+                    }
                 }
 
                 return true;
